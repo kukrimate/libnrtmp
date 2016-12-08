@@ -173,10 +173,6 @@ int RTMP_ParseURL(const char *url, int *protocol, AVal *host,
 	}
 done:
 
-	nputs(host->av_val, host->av_len);
-	nputs(app->av_val, app->av_len);
-	nputs(playpath->av_val, playpath->av_len);
-
 	return TRUE;
 }
 
