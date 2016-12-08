@@ -783,13 +783,15 @@ main(int argc, char **argv)
 
   char *flvFile = 0;
 
+/* TODO: better signal handler, becouse 
+this doesn't exit at all with Ctrl+C on modern Linux  
   signal(SIGINT, sigIntHandler);
   signal(SIGTERM, sigIntHandler);
 #ifndef WIN32
   signal(SIGHUP, sigIntHandler);
   signal(SIGPIPE, sigIntHandler);
   signal(SIGQUIT, sigIntHandler);
-#endif
+#endif*/
 
   RTMP_debuglevel = RTMP_LOGINFO;
 

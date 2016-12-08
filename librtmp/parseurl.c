@@ -30,8 +30,158 @@
 #include "rtmp_sys.h"
 #include "log.h"
 
-int RTMP_ParseURL(const char *url, int *protocol, AVal *host, unsigned int *port,
-	AVal *playpath, AVal *app)
+/* debug printer for the parser */
+static void nputs(char *str, int n)
+{
+	for (int i = 0; i < n; ++i) {
+		printf("%c", str[i]);
+	}
+	printf("\n");
+}
+
+/* count how many 'chr' characters are in a string */
+inline int count_chr(char *str, int str_len, char chr)
+{
+	int count = 0;
+	for (int i = 0; i < str_len; ++i) {
+		if (str[i] == chr)
+			++count;
+	}
+	return count;
+}
+
+static int parse_address(char *str, int str_len, 
+	AVal *host, unsigned int *port)
+{
+	int port_num;
+	char port_str[6];
+	int colon_count = count_chr(str, str_len, ':');
+	if (colon_count == 1) { // port included
+		// address
+		host->av_val = str;
+		host->av_len = strchr(str, ':') - str;
+		// port
+		if (str_len - host->av_len - 1 > 5) // invalid port
+			return FALSE;
+		strncpy(port_str, str + host->av_len + 1, 
+			str_len - host->av_len - 1);
+		port_num = atoi(port_str);
+		if (port_num < 1 || 65535 < port_num) // invalid port
+			return FALSE;
+		*port = port_num;
+	} else if (colon_count == 0) { // no port included
+		host->av_val = str;
+		host->av_len = str_len;
+	} else { // invalid address
+		return FALSE;
+	}
+	return TRUE;
+}
+
+/* new standard confornment parser */
+int RTMP_ParseURL(const char *url, int *protocol, AVal *host,
+ unsigned int *port, AVal *playpath, AVal *app)
+{
+	char *pointer = strstr(url, "://");
+	int protocol_len = pointer - url;
+	if(protocol_len == 4 && 0 ==
+	 strncasecmp(url, "rtmp", 4)) {
+		*protocol = RTMP_PROTOCOL_RTMP;
+	} else if(protocol_len == 5 && 0 ==
+	 strncasecmp(url, "rtmpt", 5)) {
+		*protocol = RTMP_PROTOCOL_RTMPT;
+	} else if(protocol_len == 5 && 0 ==
+	 strncasecmp(url, "rtmps", 5)) {
+	    *protocol = RTMP_PROTOCOL_RTMPS;
+	} else if(protocol_len == 5 && 0 ==
+	 strncasecmp(url, "rtmpe", 5)) {
+	    *protocol = RTMP_PROTOCOL_RTMPE;
+	} else if(protocol_len == 5 && 0 ==
+	 strncasecmp(url, "rtmfp", 5)) {
+	    *protocol = RTMP_PROTOCOL_RTMFP;
+	} else if(protocol_len == 6 && 0 ==
+	 strncasecmp(url, "rtmpte", 6)) {
+	    *protocol = RTMP_PROTOCOL_RTMPTE;
+	} else if(protocol_len == 6 && 0 ==
+	 strncasecmp(url, "rtmpts", 6)) {
+	    *protocol = RTMP_PROTOCOL_RTMPTS;
+	} else {
+		RTMP_Log(RTMP_LOGWARNING, "Unknown protocol!\n");
+		return FALSE;
+	}
+	pointer += 3; // skip ://
+
+	int slash_count = count_chr(pointer, strlen(pointer), '/');
+	if (slash_count > 2) { // long url
+		for (int i = 0;;++i) {
+			char *next = strchr(pointer, '/');
+			int len = next - pointer;
+			if (!next)
+				len = strlen(pointer);
+			switch (i) {
+			case 0: // host
+				if (!parse_address(pointer,
+				 len, host, port)) { // invalid address
+					return FALSE;
+				}
+				break;
+			case 1: // app
+				app->av_val = pointer;
+				break;
+			case 2: // app instance
+				app->av_len = next - app->av_val;
+				break;
+			case 3: // playpath from now onwards
+				playpath->av_val = pointer;
+				playpath->av_len = strlen(pointer);
+				goto done;
+			}
+			if (!next) // invalid url
+				return FALSE;
+			pointer = next + 1;
+		}
+	} else if (slash_count == 2 ) { // short url
+		for (int i = 0;;++i) {
+			char *next = strchr(pointer, '/');
+			int len = next - pointer;
+			if (!next)
+				len = strlen(pointer);
+			switch (i) {
+			case 0: // host
+				if (!parse_address(pointer,
+				 len, host, port)) { // invalid address
+					return FALSE;
+				}
+				break;
+			case 1: // app
+				app->av_val = pointer;
+				app->av_len = len;
+				break;
+			case 2: // playpath
+				playpath->av_val = pointer;
+				playpath->av_len = len;
+				break;
+			default: // invalid url
+				return FALSE;
+			}
+			if (!next)
+				break;
+			pointer = next + 1;
+		}
+	} else { // invalid url
+		return FALSE;
+	}
+done:
+
+	nputs(host->av_val, host->av_len);
+	nputs(app->av_val, app->av_len);
+	nputs(playpath->av_val, playpath->av_len);
+
+	return TRUE;
+}
+
+int RTMP_ParseURL_old(const char *url, int *protocol,
+ AVal *host, unsigned int *port, AVal *playpath, AVal *app)
 {
 	char *p, *end, *col, *ques, *slash;
 
